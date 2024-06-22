@@ -3,12 +3,12 @@
         "name": "PLEX拓展",
         "description": "PLEX拓展",
         "labels": "PLEX",
-        "version": "0.1",
+        "version": "1.2",
         "icon": "Plex_A.png",
         "author": "test",
         "level": 2,
         "history": {
-                    "v0.1": "test"
+                    "v1.2": "test"
                    }
     }
     
