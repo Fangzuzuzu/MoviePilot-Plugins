@@ -1,12 +1,10 @@
 {
     "plextools": {
-        "name": "PLEX拓展",
-        "description": "PLEX拓展",
+        "name": "PLEX工具箱",
+        "description": "Plex美化工具箱",
         "labels": "PLEX",
         "version": "1.2",
-        "icon": "Plex_A.png",
-        "author": "test",
-        "level": 2,
+        "icon": "https://raw.githubusercontent.com/Alano-i/Mbot-Plugins/main/MP-Plugins/plextools/logo.jpg",
+        "author": "Alano-i",
+        "level": 1
     }
-    
-}
