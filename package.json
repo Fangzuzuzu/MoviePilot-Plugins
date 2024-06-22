@@ -6,8 +6,10 @@
         "version": "0.1",
         "icon": "plugins/plextools/logo.jpg",
         "author": "test",
-        "level": 2
+        "level": 2,
+        "history": {
+                    "v0.1": "test"
+                   }
     }
     
 }
-
