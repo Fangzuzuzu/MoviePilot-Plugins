@@ -4,7 +4,7 @@
         "description": "PLEX拓展",
         "labels": "PLEX",
         "version": "0.1",
-        "icon": "plugins/plextools/logo.jpg",
+        "icon": "Plex_A.png",
         "author": "test",
         "level": 2,
         "history": {
