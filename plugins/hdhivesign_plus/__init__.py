@@ -1499,9 +1499,13 @@ class HdhiveSign(_PluginBase):
         """
         try:
             if self._scheduler:
-                self._scheduler.remove_all_jobs()
+                try:
+                    self._scheduler.remove_all_jobs()
+                except Exception:
+                    pass
                 if self._scheduler.running:
-                    self._scheduler.shutdown()
+                    # 避免安装/重载阶段阻塞等待执行中的任务结束
+                    self._scheduler.shutdown(wait=False)
                 self._scheduler = None
         except Exception as e:
             logger.error(f"停止影巢签到服务失败: {str(e)}")
