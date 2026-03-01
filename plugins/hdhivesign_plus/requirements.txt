@@ -1,2 +1,2 @@
-PyJWT
-cloudscraper>=1.2.71,<2.0.0
+# cloudscraper 为可选依赖，代码中已有 try/except 回退到 requests
+# PyJWT 已在 MoviePilot 基础环境预装
