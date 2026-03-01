@@ -47,7 +47,7 @@ class HdhiveSign(_PluginBase):
     # 插件版本
     plugin_version = "1.4.0"
     # 插件作者
-    plugin_author = "custom"
+    plugin_author = "房祖名"
     # 作者主页
     author_url = "https://github.com/madrays"
     # 插件配置项ID前缀
