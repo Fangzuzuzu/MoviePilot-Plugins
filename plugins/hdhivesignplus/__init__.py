@@ -1608,8 +1608,6 @@ class HdhivesignPlus(_PluginBase):
                 logger.warning(f"cloudscraper 不可用，将尝试 requests：{e}")
                 scraper = requests
                 logger.info("自动登录: 回退到 requests")
-            resp_warm = None
-            warm_text = ""
 
             def _build_cookie_string(
                 resp_obj=None, token_fallback: Optional[str] = None
@@ -1644,141 +1642,133 @@ class HdhivesignPlus(_PluginBase):
                     return "; ".join(cookie_items)
                 return None
 
-            # 预热登录页，拿到初始 Cookie
+            # 预热登录页，拿到初始 Cookie 和页面内容
             login_url = f"{self._base_url}{self._login_page}"
+            resp_warm = None
+            warm_text = ""
             try:
                 logger.info(f"自动登录: 预热 {login_url}")
-                resp_warm = scraper.get(login_url, timeout=30, proxies=settings.PROXY)
+                resp_warm = scraper.get(login_url, timeout=30, proxies=settings.PROXY, verify=False)
                 logger.info(
                     f"自动登录: 预热状态码 {getattr(resp_warm, 'status_code', 'unknown')} Content-Type {getattr(resp_warm.headers, 'get', lambda k: '')('Content-Type')}"
                 )
                 warm_text = getattr(resp_warm, "text", "") or ""
-            except Exception:
-                pass
-
-            # 尝试 /login 表单登录（当前站点路径更稳定）
-            try:
-                hidden_fields = {}
-                if warm_text:
-                    for key in [
-                        "csrfToken",
-                        "csrf_token",
-                        "_token",
-                        "authenticity_token",
-                        "callbackUrl",
-                        "redirectTo",
-                    ]:
-                        m = re.search(
-                            rf'name=["\']{key}["\']\s+value=["\']([^"\']+)["\']',
-                            warm_text,
-                            re.I,
-                        )
-                        if m:
-                            hidden_fields[key] = m.group(1)
-
-                form_attempts = [
-                    (
-                        "json(username)",
-                        {
-                            "username": getattr(self, "_username", ""),
-                            "password": getattr(self, "_password", ""),
-                            **hidden_fields,
-                        },
-                        {
-                            "User-Agent": settings.USER_AGENT,
-                            "Accept": "application/json, text/plain, */*",
-                            "Origin": self._base_url,
-                            "Referer": login_url,
-                            "Content-Type": "application/json",
-                        },
-                        "json",
-                    ),
-                    (
-                        "form(username)",
-                        {
-                            "username": getattr(self, "_username", ""),
-                            "password": getattr(self, "_password", ""),
-                            **hidden_fields,
-                        },
-                        {
-                            "User-Agent": settings.USER_AGENT,
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                            "Origin": self._base_url,
-                            "Referer": login_url,
-                            "Content-Type": "application/x-www-form-urlencoded",
-                        },
-                        "form",
-                    ),
-                    (
-                        "form(email)",
-                        {
-                            "email": getattr(self, "_username", ""),
-                            "password": getattr(self, "_password", ""),
-                            **hidden_fields,
-                        },
-                        {
-                            "User-Agent": settings.USER_AGENT,
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                            "Origin": self._base_url,
-                            "Referer": login_url,
-                            "Content-Type": "application/x-www-form-urlencoded",
-                        },
-                        "form",
-                    ),
-                ]
-
-                for label, payload, headers, mode in form_attempts:
-                    try:
-                        logger.info(f"自动登录: 尝试 /login 表单登录({label})")
-                        if mode == "json":
-                            resp_login = scraper.post(
-                                login_url,
-                                headers=headers,
-                                json=payload,
-                                timeout=30,
-                                proxies=settings.PROXY,
-                                allow_redirects=True,
-                            )
-                        else:
-                            resp_login = scraper.post(
-                                login_url,
-                                headers=headers,
-                                data=payload,
-                                timeout=30,
-                                proxies=settings.PROXY,
-                                allow_redirects=True,
-                            )
-
-                        logger.info(
-                            f"自动登录: /login({label}) 状态码 {getattr(resp_login, 'status_code', 'unknown')} Content-Type {getattr(resp_login.headers, 'get', lambda k: '')('Content-Type')}"
-                        )
-
-                        cookie_str = _build_cookie_string(resp_login)
-                        if not cookie_str:
-                            token_from_json = None
-                            try:
-                                data = resp_login.json()
-                                if isinstance(data, dict):
-                                    meta = data.get("meta") or {}
-                                    token_from_json = (
-                                        meta.get("access_token")
-                                        or data.get("access_token")
-                                        or data.get("token")
-                                    )
-                            except Exception:
-                                pass
-                            cookie_str = _build_cookie_string(
-                                resp_login, token_from_json
-                            )
-
-                        if cookie_str:
-                            logger.info("/login 表单登录成功，已生成Cookie")
-                            return cookie_str
-                    except Exception as e:
-                        logger.debug(f"/login 表单登录尝试失败({label}): {e}")
             except Exception as e:
-                logger.debug(f"/login 表单登录流程异常: {e}")
-            # 尝试 API 登录候选
+                logger.warning(f"自动登录: 预热失败: {e}")
+
+            # ====== 方案1: Next.js Server Action 登录 (最高优先级) ======
+            # 影巢使用 Next.js Server Action 机制进行登录
+            # 请求格式: POST /login, Content-Type: text/plain, next-action: <action_id>
+            # 请求体: [{"username":"xxx","password":"xxx"},"/"]
+            try:
+                logger.info("自动登录: 尝试 Next.js Server Action 登录")
+
+                # 提取 next-action token
+                # 1. 先从预热页面 HTML 中查找
+                next_action_token = None
+                if warm_text:
+                    # 从 JS chunk 脚本 URL 中查找 actionId
+                    import re as _re
+
+                    # 方式A: 从内联脚本中提取
+                    m = _re.search(r'"actionId"\s*:\s*"([a-fA-F0-9]{30,80})"', warm_text)
+                    if m:
+                        next_action_token = m.group(1)
+                        logger.info(f"自动登录: 从内联脚本提取 next-action={next_action_token}")
+
+                    # 方式B: 从页面中查找所有 JS chunk URL，下载并搜索 login action
+                    if not next_action_token:
+                        js_urls = _re.findall(r'src="(/_next/static/chunks/[^"]+\.js)"', warm_text)
+                        # 也查找 app 路由的 JS 文件
+                        js_urls += _re.findall(r'src="(/_next/static/[^"]+/pages?/[^"]+\.js)"', warm_text)
+                        logger.info(f"自动登录: 找到 {len(js_urls)} 个 JS chunk URL")
+                        for js_path in js_urls:
+                            try:
+                                js_url = f"{self._base_url}{js_path}"
+                                js_resp = scraper.get(js_url, timeout=15, proxies=settings.PROXY, verify=False)
+                                js_text = js_resp.text or ""
+                                # 查找类似 login 相关的 action ID
+                                # Next.js Server Action 通常在 JS 中以 createServerReference("actionId",...) 形式出现
+                                # 或者以 $$ACTION_ID 形式出现
+                                action_matches = _re.findall(
+                                    r'(?:createServerReference|registerServerReference|\$\$ACTION_ID)\s*(?:\(|=)\s*"([a-fA-F0-9]{30,80})"',
+                                    js_text
+                                )
+                                if action_matches:
+                                    # 通常 login 页面的 action 是第一个或唯一一个
+                                    next_action_token = action_matches[0]
+                                    logger.info(f"自动登录: 从 JS chunk 提取 next-action={next_action_token} (来自 {js_path})")
+                                    break
+                            except Exception:
+                                continue
+
+                # 2. 如果提取失败，使用已知的 action ID (从浏览器抓包获得)
+                if not next_action_token:
+                    # 这是从浏览器网络请求中抓取到的实际 next-action ID
+                    next_action_token = "60a3fc399468c700be8a3ecc69cd86c911899c9c85"
+                    logger.info(f"自动登录: 使用已知的 next-action={next_action_token}")
+
+                sa_headers = {
+                    "User-Agent": settings.USER_AGENT,
+                    "Accept": "text/x-component",
+                    "Origin": self._base_url,
+                    "Referer": login_url,
+                    "Content-Type": "text/plain;charset=UTF-8",
+                    "next-action": next_action_token,
+                    "next-router-state-tree": "%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D",
+                }
+                # 关键修正: 请求体格式应为 [{"username":"xxx","password":"xxx"},"/"]
+                body = json.dumps(
+                    [
+                        {
+                            "username": getattr(self, "_username", ""),
+                            "password": getattr(self, "_password", ""),
+                        },
+                        "/"
+                    ]
+                )
+                logger.info(f"自动登录: 发送 Server Action 请求到 {login_url}")
+                resp = scraper.post(
+                    login_url, headers=sa_headers, data=body, timeout=30,
+                    proxies=settings.PROXY, verify=False
+                )
+                logger.info(
+                    f"自动登录: SA 登录状态码 {getattr(resp, 'status_code', 'unknown')} "
+                    f"Content-Type {getattr(resp.headers, 'get', lambda k: '')('Content-Type')}"
+                )
+
+                # 检查响应中的 Set-Cookie
+                cookie_str = _build_cookie_string(resp)
+                if cookie_str:
+                    logger.info("Server Action 登录成功，已从 Set-Cookie 生成 Cookie")
+                    return cookie_str
+
+                # 检查响应体中是否有 token 信息
+                resp_text = resp.text or ""
+                if resp_text:
+                    logger.debug(f"自动登录: SA 响应文本片段: {resp_text[:500]}")
+                    # Next.js Server Action 响应中可能包含 token
+                    token_match = re.search(r'"token"\s*:\s*"([^"]+)"', resp_text)
+                    if token_match:
+                        token_val = token_match.group(1)
+                        cookie_str = f"token={token_val}"
+                        csrf_match = re.search(r'"csrf_access_token"\s*:\s*"([^"]+)"', resp_text)
+                        if csrf_match:
+                            cookie_str += f"; csrf_access_token={csrf_match.group(1)}"
+                        logger.info("Server Action 登录成功，已从响应体提取 Cookie")
+                        return cookie_str
+
+                    # 检查是否有错误信息
+                    error_match = re.search(r'"message"\s*:\s*"([^"]+)"', resp_text)
+                    if error_match:
+                        logger.warning(f"Server Action 登录失败: {error_match.group(1)}")
+                    else:
+                        logger.warning(f"Server Action 登录未获取到 token, 状态码: {resp.status_code}")
+
+            except Exception as e:
+                logger.warning(f"Server Action 登录异常: {e}")
+
+            # ====== 方案2: API 登录候选 ======
             for path in self._login_api_candidates:
                 url = f"{self._base_url}{path}"
                 headers = {
@@ -1795,133 +1785,32 @@ class HdhivesignPlus(_PluginBase):
                 try:
                     logger.info(f"自动登录: 尝试 API 登录 {url}")
                     resp = scraper.post(
-                        url,
-                        headers=headers,
-                        json=payload,
-                        timeout=30,
-                        proxies=settings.PROXY,
+                        url, headers=headers, json=payload,
+                        timeout=30, proxies=settings.PROXY, verify=False,
                     )
                     logger.info(
-                        f"自动登录: API 登录状态码 {getattr(resp, 'status_code', 'unknown')} Content-Type {getattr(resp.headers, 'get', lambda k: '')('Content-Type')}"
+                        f"自动登录: API 登录状态码 {getattr(resp, 'status_code', 'unknown')} "
+                        f"Content-Type {getattr(resp.headers, 'get', lambda k: '')('Content-Type')}"
                     )
-                    # 成功条件：响应包含 set-cookie 或 JSON 内含 meta.access_token
-                    cookies_dict = None
-                    try:
-                        cookies_dict = (
-                            getattr(resp, "cookies", None).get_dict()
-                            if getattr(resp, "cookies", None)
-                            else {}
-                        )
-                    except Exception:
-                        cookies_dict = {}
-                    token_cookie = cookies_dict.get("token")
-                    csrf_cookie = cookies_dict.get("csrf_access_token")
-                    if not token_cookie:
-                        try:
-                            data = resp.json()
-                            logger.info(
-                                f"自动登录: API 登录返回JSON keys {list(data.keys()) if isinstance(data, dict) else 'non-dict'}"
-                            )
-                            meta = data.get("meta") or {}
-                            acc = meta.get("access_token")
-                            ref = meta.get("refresh_token")
-                            if acc:
-                                # 将 access_token 写入 token Cookie
-                                if hasattr(scraper, "cookies"):
-                                    try:
-                                        scraper.cookies.set(
-                                            "token",
-                                            acc,
-                                            domain=self._base_url.replace(
-                                                "https://", ""
-                                            ).replace("http://", ""),
-                                        )
-                                        token_cookie = acc
-                                    except Exception:
-                                        token_cookie = acc
-                                else:
-                                    token_cookie = acc
-                        except Exception:
-                            pass
-                    if token_cookie:
-                        cookie_items = [f"token={token_cookie}"]
-                        if csrf_cookie:
-                            cookie_items.append(f"csrf_access_token={csrf_cookie}")
-                        cookie_str = "; ".join(cookie_items)
-                        logger.info("API登录成功，已生成Cookie")
+                    cookie_str = _build_cookie_string(resp)
+                    if cookie_str:
+                        logger.info("API 登录成功，已生成 Cookie")
                         return cookie_str
+                    # 尝试从 JSON 响应体提取 token
+                    try:
+                        data = resp.json()
+                        meta = data.get("meta") or {}
+                        acc = meta.get("access_token") or data.get("access_token") or data.get("token")
+                        if acc:
+                            cookie_str = f"token={acc}"
+                            logger.info("API 登录成功，已从响应体提取 Cookie")
+                            return cookie_str
+                    except Exception:
+                        pass
                 except Exception as e:
-                    logger.debug(f"API登录候选失败: {path} -> {e}")
-            # 尝试 Next.js Server Action 登录
-            url = f"{self._base_url}{self._login_page}"
-            headers = {
-                "User-Agent": settings.USER_AGENT,
-                "Accept": "text/x-component",
-                "Origin": self._base_url,
-                "Referer": login_url,
-                "Content-Type": "text/plain;charset=UTF-8",
-            }
-            # 从预热页面尝试提取 next-action token
-            next_action_token = None
-            try:
-                warm_text = getattr(resp_warm, "text", "") or ""
-                # 常见形式：next-action":"<token>" 或 name="next-action" value="<token>"
-                import re as _re
+                    logger.debug(f"API 登录候选失败: {path} -> {e}")
 
-                m = _re.search(r'next-action"\s*:\s*"([a-fA-F0-9]{16,64})"', warm_text)
-                if not m:
-                    m = _re.search(
-                        r'name="next-action"\s+value="([a-fA-F0-9]{16,64})"', warm_text
-                    )
-                if m:
-                    next_action_token = m.group(1)
-                    headers["next-action"] = next_action_token
-                    # 参考样例的最小 router state（静态值）
-                    headers["next-router-state-tree"] = (
-                        "%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D"
-                    )
-                    logger.info(f"自动登录: 提取 next-action={next_action_token}")
-                else:
-                    logger.info("自动登录: 未在页面提取到 next-action token")
-            except Exception as e:
-                logger.debug(f"自动登录: 提取 next-action 失败: {e}")
-            body = json.dumps(
-                [
-                    {
-                        "username": getattr(self, "_username", ""),
-                        "password": getattr(self, "_password", ""),
-                    }
-                ]
-            )
-            try:
-                logger.info(f"自动登录: 尝试 Server Action 登录 {url}")
-                resp = scraper.post(
-                    url, headers=headers, data=body, timeout=30, proxies=settings.PROXY
-                )
-                logger.info(
-                    f"自动登录: SA 登录状态码 {getattr(resp, 'status_code', 'unknown')} Content-Type {getattr(resp.headers, 'get', lambda k: '')('Content-Type')}"
-                )
-                cookies_dict = None
-                try:
-                    cookies_dict = (
-                        getattr(resp, "cookies", None).get_dict()
-                        if getattr(resp, "cookies", None)
-                        else {}
-                    )
-                except Exception:
-                    cookies_dict = {}
-                token_cookie = cookies_dict.get("token")
-                csrf_cookie = cookies_dict.get("csrf_access_token")
-                if token_cookie:
-                    cookie_items = [f"token={token_cookie}"]
-                    if csrf_cookie:
-                        cookie_items.append(f"csrf_access_token={csrf_cookie}")
-                    cookie_str = "; ".join(cookie_items)
-                    logger.info("Server Action 登录成功，已生成Cookie")
-                    return cookie_str
-            except Exception as e:
-                logger.warning(f"Server Action 登录失败: {e}")
-            # 浏览器自动化兜底：使用 Playwright 直接执行页面登录并读取 Cookie
+            # ====== 方案3: Playwright 浏览器自动化兜底 ======
             try:
                 from playwright.sync_api import sync_playwright
 
