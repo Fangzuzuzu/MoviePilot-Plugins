@@ -20,7 +20,10 @@ import re
 import json
 from datetime import datetime, timedelta
 
-import jwt
+try:
+    import jwt
+except ImportError:
+    jwt = None
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
