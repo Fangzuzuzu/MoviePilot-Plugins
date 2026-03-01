@@ -37,7 +37,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class HdhiveSignPlus(_PluginBase):
+class hdhivesign_plus(_PluginBase):
     # 插件名称
     plugin_name = "影巢签到修复"
     # 插件描述
@@ -431,6 +431,7 @@ class HdhiveSignPlus(_PluginBase):
                                 "max_retries": self._max_retries,
                                 "retry_interval": self._retry_interval,
                                 "history_days": self._history_days,
+                                "sign_mode": self._sign_mode,
                                 "username": getattr(self, "_username", ""),
                                 "password": getattr(self, "_password", ""),
                             }

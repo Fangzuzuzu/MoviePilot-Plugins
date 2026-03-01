@@ -26,7 +26,7 @@
     "version": "1.5.0",
     "icon": "https://raw.githubusercontent.com/Fangzuzuzu/MoviePilot-Plugins/main/icons/hdhive.png",
     "author": "房祖名",
-    "level": 1,
+    "level": 2,
     "v2": true,
     "history": {
       "v1.5.0": "新增 /login 表单登录回退链路，提升自动登录获取Cookie成功率",
