@@ -616,6 +616,13 @@ class HdhivesignPlus(_PluginBase):
             if signin_res is None:
                 return False, "签到请求失败，响应为空，请检查代理或网络环境"
 
+            # 详细记录签到响应，方便排查
+            logger.info(
+                f"签到响应: HTTP {signin_res.status_code}, "
+                f"Content-Type: {signin_res.headers.get('Content-Type', 'unknown')}, "
+                f"Body: {signin_res.text[:300] if signin_res.text else '(空)'}"
+            )
+
             try:
                 signin_result = signin_res.json()
             except json.JSONDecodeError:
@@ -625,23 +632,42 @@ class HdhivesignPlus(_PluginBase):
                 return False, f"签到API响应格式错误，状态码: {signin_res.status_code}"
 
             message = signin_result.get("message", "无明确消息")
+            success = signin_result.get("success", False)
+            status_code = signin_res.status_code
 
-            if signin_result.get("success"):
+            # 情况1: API 明确返回成功
+            if success:
+                logger.info(f"✅ 签到成功: {message}")
                 try:
                     self._fetch_user_info(cookies, token)
                 except Exception:
                     pass
                 return True, message
 
-            if "已经签到" in message or "签到过" in message:
+            # 情况2: 消息中包含"已签到"相关关键词
+            already_signed_keywords = ["已经签到", "签到过", "已签到", "already", "重复签到", "今日已"]
+            if any(kw in message for kw in already_signed_keywords):
+                logger.info(f"ℹ️ 今日已签到，无需重复: {message}")
                 try:
                     self._fetch_user_info(cookies, token)
                 except Exception:
                     pass
                 return True, message
 
+            # 情况3: HTTP 400 + "签到失败" → 影巢对重复签到返回此组合
+            # 真正的签到失败（如 Cookie 无效）通常返回 401/403
+            if status_code == 400 and "签到失败" in message:
+                logger.info(f"ℹ️ 今日已签到（HTTP 400 + 签到失败 = 重复签到）: {message}")
+                try:
+                    self._fetch_user_info(cookies, token)
+                except Exception:
+                    pass
+                return True, "今日已签到"
+
+            # 情况4: 真正的失败
             logger.error(
-                f"签到失败, HTTP状态码: {signin_res.status_code}, 消息: {message}"
+                f"❌ 签到失败: HTTP {status_code}, success={success}, 消息: {message}, "
+                f"完整响应: {signin_result}"
             )
             return False, message
 
