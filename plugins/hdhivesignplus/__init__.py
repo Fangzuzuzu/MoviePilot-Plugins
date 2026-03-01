@@ -48,7 +48,7 @@ class HdhivesignPlus(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/Fangzuzuzu/MoviePilot-Plugins/main/icons/hdhive.png"
     # 插件版本
-    plugin_version = "1.5.0"
+    plugin_version = "1.6.0"
     # 插件作者
     plugin_author = "房祖名"
     # 作者主页
