@@ -1,6 +1,6 @@
 """
 影巢签到修复
-版本: 1.4.0
+版本: 1.5.0
 作者: 自定义
 功能:
 - 自动完成影巢(HDHive)每日签到
@@ -45,7 +45,7 @@ class HdhiveSign(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/madrays/MoviePilot-Plugins/main/icons/hdhive.ico"
     # 插件版本
-    plugin_version = "1.4.0"
+    plugin_version = "1.5.0"
     # 插件作者
     plugin_author = "房祖名"
     # 作者主页
@@ -1600,6 +1600,42 @@ class HdhiveSign(_PluginBase):
                 logger.warning(f"cloudscraper 不可用，将尝试 requests：{e}")
                 scraper = requests
                 logger.info("自动登录: 回退到 requests")
+            resp_warm = None
+            warm_text = ""
+
+            def _build_cookie_string(
+                resp_obj=None, token_fallback: Optional[str] = None
+            ) -> Optional[str]:
+                cookies_dict = {}
+                try:
+                    if getattr(scraper, "cookies", None):
+                        cookies_dict.update(
+                            getattr(scraper, "cookies").get_dict() or {}
+                        )
+                except Exception:
+                    pass
+                try:
+                    if resp_obj is not None and getattr(resp_obj, "cookies", None):
+                        cookies_dict.update(resp_obj.cookies.get_dict() or {})
+                except Exception:
+                    pass
+
+                token_cookie = (
+                    cookies_dict.get("token")
+                    or cookies_dict.get("access_token")
+                    or cookies_dict.get("auth_token")
+                    or token_fallback
+                )
+                csrf_cookie = cookies_dict.get("csrf_access_token") or cookies_dict.get(
+                    "csrf_token"
+                )
+                if token_cookie:
+                    cookie_items = [f"token={token_cookie}"]
+                    if csrf_cookie:
+                        cookie_items.append(f"csrf_access_token={csrf_cookie}")
+                    return "; ".join(cookie_items)
+                return None
+
             # 预热登录页，拿到初始 Cookie
             login_url = f"{self._base_url}{self._login_page}"
             try:
@@ -1608,8 +1644,132 @@ class HdhiveSign(_PluginBase):
                 logger.info(
                     f"自动登录: 预热状态码 {getattr(resp_warm, 'status_code', 'unknown')} Content-Type {getattr(resp_warm.headers, 'get', lambda k: '')('Content-Type')}"
                 )
+                warm_text = getattr(resp_warm, "text", "") or ""
             except Exception:
                 pass
+
+            # 尝试 /login 表单登录（当前站点路径更稳定）
+            try:
+                hidden_fields = {}
+                if warm_text:
+                    for key in [
+                        "csrfToken",
+                        "csrf_token",
+                        "_token",
+                        "authenticity_token",
+                        "callbackUrl",
+                        "redirectTo",
+                    ]:
+                        m = re.search(
+                            rf'name=["\']{key}["\']\s+value=["\']([^"\']+)["\']',
+                            warm_text,
+                            re.I,
+                        )
+                        if m:
+                            hidden_fields[key] = m.group(1)
+
+                form_attempts = [
+                    (
+                        "json(username)",
+                        {
+                            "username": getattr(self, "_username", ""),
+                            "password": getattr(self, "_password", ""),
+                            **hidden_fields,
+                        },
+                        {
+                            "User-Agent": settings.USER_AGENT,
+                            "Accept": "application/json, text/plain, */*",
+                            "Origin": self._base_url,
+                            "Referer": login_url,
+                            "Content-Type": "application/json",
+                        },
+                        "json",
+                    ),
+                    (
+                        "form(username)",
+                        {
+                            "username": getattr(self, "_username", ""),
+                            "password": getattr(self, "_password", ""),
+                            **hidden_fields,
+                        },
+                        {
+                            "User-Agent": settings.USER_AGENT,
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Origin": self._base_url,
+                            "Referer": login_url,
+                            "Content-Type": "application/x-www-form-urlencoded",
+                        },
+                        "form",
+                    ),
+                    (
+                        "form(email)",
+                        {
+                            "email": getattr(self, "_username", ""),
+                            "password": getattr(self, "_password", ""),
+                            **hidden_fields,
+                        },
+                        {
+                            "User-Agent": settings.USER_AGENT,
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Origin": self._base_url,
+                            "Referer": login_url,
+                            "Content-Type": "application/x-www-form-urlencoded",
+                        },
+                        "form",
+                    ),
+                ]
+
+                for label, payload, headers, mode in form_attempts:
+                    try:
+                        logger.info(f"自动登录: 尝试 /login 表单登录({label})")
+                        if mode == "json":
+                            resp_login = scraper.post(
+                                login_url,
+                                headers=headers,
+                                json=payload,
+                                timeout=30,
+                                proxies=settings.PROXY,
+                                allow_redirects=True,
+                            )
+                        else:
+                            resp_login = scraper.post(
+                                login_url,
+                                headers=headers,
+                                data=payload,
+                                timeout=30,
+                                proxies=settings.PROXY,
+                                allow_redirects=True,
+                            )
+
+                        logger.info(
+                            f"自动登录: /login({label}) 状态码 {getattr(resp_login, 'status_code', 'unknown')} Content-Type {getattr(resp_login.headers, 'get', lambda k: '')('Content-Type')}"
+                        )
+
+                        cookie_str = _build_cookie_string(resp_login)
+                        if not cookie_str:
+                            token_from_json = None
+                            try:
+                                data = resp_login.json()
+                                if isinstance(data, dict):
+                                    meta = data.get("meta") or {}
+                                    token_from_json = (
+                                        meta.get("access_token")
+                                        or data.get("access_token")
+                                        or data.get("token")
+                                    )
+                            except Exception:
+                                pass
+                            cookie_str = _build_cookie_string(
+                                resp_login, token_from_json
+                            )
+
+                        if cookie_str:
+                            logger.info("/login 表单登录成功，已生成Cookie")
+                            return cookie_str
+                    except Exception as e:
+                        logger.debug(f"/login 表单登录尝试失败({label}): {e}")
+            except Exception as e:
+                logger.debug(f"/login 表单登录流程异常: {e}")
             # 尝试 API 登录候选
             for path in self._login_api_candidates:
                 url = f"{self._base_url}{path}"
