@@ -49,9 +49,9 @@ class HdhiveSign(_PluginBase):
     # 插件作者
     plugin_author = "房祖名"
     # 作者主页
-    author_url = "https://github.com/madrays"
+    author_url = "https://github.com/Fangzuzuzu"
     # 插件配置项ID前缀
-    plugin_config_prefix = "hdhivesign_"
+    plugin_config_prefix = "hdhivesign_plus_"
     # 加载顺序
     plugin_order = 1
     # 可使用的用户级别
@@ -984,7 +984,7 @@ class HdhiveSign(_PluginBase):
         self.post_message(mtype=NotificationType.SiteMessage, title=title, text=text)
 
     def get_state(self) -> bool:
-        logger.info(f"hdhivesign状态: {self._enabled}")
+        logger.info(f"hdhivesign_plus状态: {self._enabled}")
         return self._enabled
 
     def get_service(self) -> List[Dict[str, Any]]:
@@ -992,7 +992,7 @@ class HdhiveSign(_PluginBase):
             logger.info(f"注册定时服务: {self._cron}")
             return [
                 {
-                    "id": "hdhivesign",
+                    "id": "hdhivesign_plus",
                     "name": "影巢签到",
                     "trigger": CronTrigger.from_crontab(self._cron),
                     "func": self.sign,

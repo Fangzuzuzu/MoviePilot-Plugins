@@ -19,7 +19,7 @@
       "v1.0.0": "支持API方式签到，绕过CloudFlare防护，支持随机奖励和自动加鸡腿"
     }
   },
-  "HdhiveSign": {
+  "hdhivesign_plus": {
     "name": "影巢签到修复",
     "description": "修改自madrays，增加赌狗签到功能。",
     "labels": "签到,影巢",
