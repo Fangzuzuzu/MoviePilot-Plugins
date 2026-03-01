@@ -43,7 +43,7 @@ class HdhiveSign(_PluginBase):
     # 插件描述
     plugin_desc = "修改自madrays，增加赌狗签到功能。"
     # 插件图标
-    plugin_icon = "https://raw.githubusercontent.com/madrays/MoviePilot-Plugins/main/icons/hdhive.ico"
+    plugin_icon = "https://raw.githubusercontent.com/Fangzuzuzu/MoviePilot-Plugins/main/icons/hdhive.png"
     # 插件版本
     plugin_version = "1.5.0"
     # 插件作者
