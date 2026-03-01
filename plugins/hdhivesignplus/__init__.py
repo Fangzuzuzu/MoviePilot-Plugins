@@ -1648,7 +1648,7 @@ class HdhivesignPlus(_PluginBase):
             warm_text = ""
             try:
                 logger.info(f"自动登录: 预热 {login_url}")
-                resp_warm = scraper.get(login_url, timeout=30, proxies=settings.PROXY, verify=False)
+                resp_warm = scraper.get(login_url, timeout=30, proxies=settings.PROXY)
                 logger.info(
                     f"自动登录: 预热状态码 {getattr(resp_warm, 'status_code', 'unknown')} Content-Type {getattr(resp_warm.headers, 'get', lambda k: '')('Content-Type')}"
                 )
@@ -1685,7 +1685,7 @@ class HdhivesignPlus(_PluginBase):
                         for js_path in js_urls:
                             try:
                                 js_url = f"{self._base_url}{js_path}"
-                                js_resp = scraper.get(js_url, timeout=15, proxies=settings.PROXY, verify=False)
+                                js_resp = scraper.get(js_url, timeout=15, proxies=settings.PROXY)
                                 js_text = js_resp.text or ""
                                 # 查找类似 login 相关的 action ID
                                 # Next.js Server Action 通常在 JS 中以 createServerReference("actionId",...) 形式出现
@@ -1730,7 +1730,7 @@ class HdhivesignPlus(_PluginBase):
                 logger.info(f"自动登录: 发送 Server Action 请求到 {login_url}")
                 resp = scraper.post(
                     login_url, headers=sa_headers, data=body, timeout=30,
-                    proxies=settings.PROXY, verify=False
+                    proxies=settings.PROXY
                 )
                 logger.info(
                     f"自动登录: SA 登录状态码 {getattr(resp, 'status_code', 'unknown')} "
@@ -1786,7 +1786,7 @@ class HdhivesignPlus(_PluginBase):
                     logger.info(f"自动登录: 尝试 API 登录 {url}")
                     resp = scraper.post(
                         url, headers=headers, json=payload,
-                        timeout=30, proxies=settings.PROXY, verify=False,
+                        timeout=30, proxies=settings.PROXY,
                     )
                     logger.info(
                         f"自动登录: API 登录状态码 {getattr(resp, 'status_code', 'unknown')} "
