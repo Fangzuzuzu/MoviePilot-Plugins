@@ -37,5 +37,19 @@
       "v1.1.0": "域名改为可配置；统一API拼接；精简日志",
       "v1.0": "首次发布"
     }
+  },
+  "RssSubscribePlus": {
+    "name": "自定义订阅增强版",
+    "description": "修改自 jxxghp，新增忽略媒体库已存在开关。",
+    "labels": "订阅,RSS",
+    "version": "2.1.1",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/rss.png",
+    "author": "房祖名",
+    "level": 2,
+    "v2": true,
+    "history": {
+      "v2.1.1": "新增\"忽略媒体库已存在\"开关，开启后媒体库已有的项目也会继续下载或订阅",
+      "v2.1": "基于 jxxghp 官方 v2.1 版本修改"
+    }
   }
 }
