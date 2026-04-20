@@ -7,7 +7,6 @@
     "icon": "https://raw.githubusercontent.com/Fangzuzuzu/MoviePilot-Plugins/main/icons/nodeseeksign.png",
     "author": "madrays",
     "level": 2,
-    "v2": true,
     "history": {
       "v2.1.0": "修复统计与通知：仅统计成功记录；已签到显示今日奖励与排名；签到记录解析更稳健",
       "v2.0.0": "重构签到：时间验证兜底；始终拉取用户与奖励；简化解析；新增近N天收益统计；修复cloudscraper初始化",
@@ -27,7 +26,6 @@
     "icon": "https://raw.githubusercontent.com/Fangzuzuzu/MoviePilot-Plugins/main/icons/hdhive.png",
     "author": "房祖名",
     "level": 2,
-    "v2": true,
     "history": {
       "v1.6.0": "适配影巢 Next.js Server Action 登录机制，修复自动登录失败问题",
       "v1.5.0": "新增 /login 表单登录回退链路，提升自动登录获取Cookie成功率",
@@ -46,7 +44,6 @@
     "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/rss.png",
     "author": "房祖名",
     "level": 2,
-    "v2": true,
     "history": {
       "v2.1.1": "新增\"忽略媒体库已存在\"开关，开启后媒体库已有的项目也会继续下载或订阅",
       "v2.1": "基于 jxxghp 官方 v2.1 版本修改"
